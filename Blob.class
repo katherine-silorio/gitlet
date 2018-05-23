@@ -1,0 +1,15 @@
+package gitlet;
+
+import java.io.File;
+
+public class Blob {
+    public Blob() {
+    }
+
+    public static String sha1(File file) {
+        String filename = file.getName();
+        String s = Utils.readContentsAsString(file);
+        String sha1 = Utils.sha1(new Object[]{filename + s});
+        return sha1;
+    }
+}
