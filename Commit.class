@@ -1,0 +1,74 @@
+package gitlet;
+
+import java.io.Serializable;
+import java.util.Iterator;
+import java.util.TreeMap;
+
+public class Commit implements Serializable {
+    private String[] _parent;
+    private String _id;
+    private String _logMessage;
+    private long _timestamp;
+    private TreeMap<String, String> _blobs;
+    private boolean _isMerge;
+
+    public Commit(String parent, String message, long timestamp, TreeMap<String, String> blobs) {
+        this._parent = new String[1];
+        this._parent[0] = parent;
+        this._logMessage = message;
+        this._timestamp = timestamp;
+        this._blobs = blobs;
+        String stringOfBlobs = "";
+        String key;
+        if (blobs != null) {
+            for(Iterator var7 = this._blobs.keySet().iterator(); var7.hasNext(); stringOfBlobs = stringOfBlobs + (String)this._blobs.get(key)) {
+                key = (String)var7.next();
+            }
+        }
+
+        this._id = Utils.sha1(new Object[]{parent + message + stringOfBlobs});
+    }
+
+    public Commit(String parent1, String parent2, String message, long timestamp, TreeMap<String, String> blobs) {
+        this._parent = new String[2];
+        this._parent[0] = parent1;
+        this._parent[1] = parent2;
+        this._logMessage = message;
+        this._timestamp = timestamp;
+        this._blobs = blobs;
+        this._isMerge = true;
+        String stringOfBlobs = "";
+        String key;
+        if (blobs != null) {
+            for(Iterator var8 = this._blobs.keySet().iterator(); var8.hasNext(); stringOfBlobs = stringOfBlobs + (String)this._blobs.get(key)) {
+                key = (String)var8.next();
+            }
+        }
+
+        this._id = Utils.sha1(new Object[]{parent1 + parent2 + message + stringOfBlobs});
+    }
+
+    public String[] parent() {
+        return this._parent;
+    }
+
+    public String id() {
+        return this._id;
+    }
+
+    public String logMessage() {
+        return this._logMessage;
+    }
+
+    public long timestamp() {
+        return this._timestamp;
+    }
+
+    public TreeMap<String, String> blobs() {
+        return this._blobs;
+    }
+
+    public boolean isMerge() {
+        return this._isMerge;
+    }
+}
