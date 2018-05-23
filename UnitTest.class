@@ -1,0 +1,132 @@
+package gitlet;
+
+import java.io.File;
+import java.time.Instant;
+import java.util.TreeMap;
+import org.junit.Assert;
+import org.junit.Test;
+import ucb.junit.textui;
+
+public class UnitTest {
+    public UnitTest() {
+    }
+
+    public static void main(String[] ignored) {
+        textui.runClasses(new Class[]{UnitTest.class});
+    }
+
+    @Test
+    public void commitTest() {
+        Commit initialCommit = new Commit((String)null, "initial commit", 0L, (TreeMap)null);
+        Assert.assertEquals("initial commit", initialCommit.logMessage());
+        Instant instant = Instant.ofEpochMilli(initialCommit.timestamp());
+        System.out.println("Instant:" + instant);
+    }
+
+    @Test
+    public void sameCommitSameSHATest() {
+        Commit c1 = new Commit((String)null, "initial commit", 0L, (TreeMap)null);
+        Commit c2 = new Commit((String)null, "initial commit", 0L, (TreeMap)null);
+        Assert.assertEquals(c1.id(), c2.id());
+        TreeMap<String, String> blobs = new TreeMap();
+        blobs.put("Name1", "ID1");
+        blobs.put("Name2", "ID2");
+        Commit c3 = new Commit(c1.parent()[0], "another test", 0L, blobs);
+        Commit c4 = new Commit(c1.parent()[0], "another test", 0L, blobs);
+        Commit c5 = new Commit(c2.parent()[0], "another test", 0L, blobs);
+        Assert.assertEquals(c3.id(), c4.id());
+        Assert.assertEquals(c3.id(), c5.id());
+    }
+
+    @Test
+    public void blobSha1Test() {
+        File test1 = new File("Makefile");
+        byte[] b1 = Utils.readContents(test1);
+        String s1 = Blob.sha1(test1);
+        File test2 = new File("Makefile2");
+        Utils.writeContents(test2, new Object[]{b1});
+        String s2 = Blob.sha1(test2);
+        System.out.println("s1: " + s1);
+        System.out.println("s2: " + s2);
+        Assert.assertNotEquals(s1, s2);
+        File file = new File("wug.txt");
+        byte[] b = Utils.readContents(file);
+        String sha1 = Utils.sha1(new Object[]{file.getName() + b});
+        System.out.println(sha1);
+    }
+
+    @Test
+    public void indexTest() {
+        File indexFile = new File(".gitlet", "index");
+        StagingArea stagingArea = FileWriterReader.readStagingArea(indexFile);
+        TreeMap<String, String> adds = stagingArea.stagedToAdd();
+        TreeMap<String, String> removes = stagingArea.stagedToRemove();
+    }
+
+    @Test
+    public void stagingAreaTest() {
+        Assert.assertEquals(0L, 0L);
+    }
+
+    @Test
+    public void fileWriterReaderTest() {
+        Assert.assertEquals(0L, 0L);
+    }
+
+    @Test
+    public void addTest() {
+        String[] addCommand = new String[]{"add", "wug.txt"};
+        Command c = new Command(addCommand);
+        c.doCommand();
+    }
+
+    @Test
+    public void utilsTest() {
+        File wugFile = new File("wug.txt");
+        System.out.println("wug.txt: " + Blob.sha1(wugFile));
+        System.out.println("wug.txt: " + Blob.sha1(wugFile));
+        File wug2File = new File("wug2.txt");
+        System.out.println("wug2.txt: " + Blob.sha1(wug2File));
+    }
+
+    @Test
+    public void checkoutTest() {
+        String[] checkoutCommand1 = new String[]{"checkout", "--", "wug.txt"};
+        Command c1 = new Command(checkoutCommand1);
+        c1.doCommand();
+        String[] checkoutCommand2 = new String[]{"checkout", "cool-beans"};
+        Command c2 = new Command(checkoutCommand2);
+        c2.doCommand();
+    }
+
+    @Test
+    public void getFullIdTest() {
+        String[] dummyCommand = new String[]{"dummy"};
+        Command c = new Command(dummyCommand);
+        String s1 = "863a6f4";
+        String s2 = c.getFullId(s1);
+        Assert.assertEquals("863a6f460e111633f611fdc98c7a99b7905a358b", s2);
+    }
+
+    @Test
+    public void resetTest() {
+        String[] resetCommand = new String[]{"reset", "a761b837"};
+        Command c = new Command(resetCommand);
+        c.doCommand();
+    }
+
+    @Test
+    public void getCommitHistoryTest() {
+        String[] dummyCommand = new String[]{"dummy"};
+        Command c = new Command(dummyCommand);
+        Commit commit = c.getHeadCommit();
+        c.getCommitHistory(commit);
+    }
+
+    @Test
+    public void getSplitPointTest() {
+        String[] dummyCommand = new String[]{"dummy"};
+        Command c = new Command(dummyCommand);
+        c.getSplitPoint("master", "cool-beans");
+    }
+}
