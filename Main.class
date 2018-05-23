@@ -1,0 +1,17 @@
+package gitlet;
+
+public class Main {
+    public Main() {
+    }
+
+    public static void main(String... args) {
+        if (args.length == 0) {
+            System.out.println("Please enter a command.");
+            System.exit(0);
+        } else {
+            Command cmnd = new Command(args);
+            cmnd.doCommand();
+        }
+
+    }
+}
