@@ -1,0 +1,27 @@
+package gitlet;
+
+import java.io.Serializable;
+import java.util.TreeMap;
+
+public class StagingArea implements Serializable {
+    private TreeMap<String, String> _stagedToAdd;
+    private TreeMap<String, String> _stagedToRemove;
+
+    public StagingArea() {
+        this._stagedToAdd = new TreeMap();
+        this._stagedToRemove = new TreeMap();
+    }
+
+    public StagingArea(TreeMap<String, String> adds, TreeMap<String, String> removes) {
+        this._stagedToAdd = adds;
+        this._stagedToRemove = removes;
+    }
+
+    public TreeMap<String, String> stagedToAdd() {
+        return this._stagedToAdd;
+    }
+
+    public TreeMap<String, String> stagedToRemove() {
+        return this._stagedToRemove;
+    }
+}
