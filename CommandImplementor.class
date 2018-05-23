@@ -1,0 +1,10 @@
+package gitlet;
+
+import java.util.ArrayList;
+
+public class CommandImplementor {
+    public static ArrayList<String> VALIDCOMMANDS;
+
+    public CommandImplementor(String... var1) {
+    }
+}
