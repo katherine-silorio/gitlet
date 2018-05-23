@@ -1,0 +1,1000 @@
+package gitlet;
+
+import java.io.File;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeMap;
+
+public class Command {
+    private File gitletDir = new File(".gitlet");
+    private File objectsDir;
+    private File filesDir;
+    private File refsDir;
+    private File indexFile;
+    private File headFile;
+    private File currentBranchFile;
+    private String _command;
+    private String[] _operands;
+
+    public Command(String... args) {
+        this.objectsDir = new File(this.gitletDir, "objects");
+        this.filesDir = new File(this.gitletDir, "files");
+        this.refsDir = new File(this.gitletDir, "refs");
+        this.headFile = new File(this.gitletDir, "HEAD");
+        this.indexFile = new File(this.gitletDir, "index");
+        this.currentBranchFile = new File(this.gitletDir, "currentBranch");
+        this._command = args[0].toLowerCase();
+        this._operands = new String[args.length - 1];
+
+        for(int i = 0; i < this._operands.length; ++i) {
+            this._operands[i] = args[i + 1];
+        }
+
+    }
+
+    public void doCommand() {
+        String var1 = this._command;
+        byte var2 = -1;
+        switch(var1.hashCode()) {
+        case -1381030494:
+            if (var1.equals("branch")) {
+                var2 = 9;
+            }
+            break;
+        case -1354815177:
+            if (var1.equals("commit")) {
+                var2 = 2;
+            }
+            break;
+        case -892481550:
+            if (var1.equals("status")) {
+                var2 = 7;
+            }
+            break;
+        case -859925990:
+            if (var1.equals("global-log")) {
+                var2 = 5;
+            }
+            break;
+        case 3643:
+            if (var1.equals("rm")) {
+                var2 = 3;
+            }
+            break;
+        case 96417:
+            if (var1.equals("add")) {
+                var2 = 1;
+            }
+            break;
+        case 107332:
+            if (var1.equals("log")) {
+                var2 = 4;
+            }
+            break;
+        case 3143097:
+            if (var1.equals("find")) {
+                var2 = 6;
+            }
+            break;
+        case 3237136:
+            if (var1.equals("init")) {
+                var2 = 0;
+            }
+            break;
+        case 103785528:
+            if (var1.equals("merge")) {
+                var2 = 12;
+            }
+            break;
+        case 108404047:
+            if (var1.equals("reset")) {
+                var2 = 11;
+            }
+            break;
+        case 998316404:
+            if (var1.equals("rm-branch")) {
+                var2 = 10;
+            }
+            break;
+        case 1536904518:
+            if (var1.equals("checkout")) {
+                var2 = 8;
+            }
+        }
+
+        switch(var2) {
+        case 0:
+            this.doInit();
+            break;
+        case 1:
+            this.doAdd();
+            break;
+        case 2:
+            this.doCommit();
+            break;
+        case 3:
+            this.doRm();
+            break;
+        case 4:
+            this.doLog();
+            break;
+        case 5:
+            this.doGlobalLog();
+            break;
+        case 6:
+            this.doFind();
+            break;
+        case 7:
+            this.doStatus();
+            break;
+        case 8:
+            this.doCheckout();
+            break;
+        case 9:
+            this.doBranch();
+            break;
+        case 10:
+            this.doRmBranch();
+            break;
+        case 11:
+            this.doReset();
+            break;
+        case 12:
+            this.doMerge();
+            break;
+        default:
+            System.out.println("No command with that name exists.");
+            this.doExit();
+        }
+
+    }
+
+    private void doInit() {
+        if (this._operands.length != 0) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        }
+
+        if (this.gitletDir.exists()) {
+            System.out.println("A Gitlet version-control system already exists in the current directory.");
+            this.doExit();
+        } else {
+            this.gitletDir.mkdir();
+            this.objectsDir.mkdir();
+            this.filesDir.mkdir();
+            this.refsDir.mkdir();
+            StagingArea index = new StagingArea();
+            FileWriterReader.writeFile(index, this.gitletDir, "index");
+            TreeMap<String, String> blobs = new TreeMap();
+            Commit initialCommit = new Commit((String)null, "initial commit", 0L, blobs);
+            String head = initialCommit.id();
+            FileWriterReader.writeFile(head, this.gitletDir, "HEAD");
+            FileWriterReader.writeFile("master", this.gitletDir, "currentBranch");
+            this.doBranch("master");
+            this.doCommit(initialCommit);
+        }
+
+    }
+
+    private void doAdd() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String filename = this._operands[0];
+            File file = new File(filename);
+            if (!file.exists()) {
+                System.out.println("File does not exist.");
+                this.doExit();
+            }
+
+            String fileId = Blob.sha1(file);
+            Commit headCommit = this.getHeadCommit();
+            TreeMap<String, String> committedBlobs = headCommit.blobs();
+            TreeMap<String, String> adds = this.getAdds();
+            TreeMap<String, String> removes = this.getRemoves();
+            if (committedBlobs.containsValue(fileId)) {
+                if (adds.containsValue(fileId)) {
+                    adds.remove(filename);
+                }
+
+                this.doExit();
+            }
+
+            if (removes.containsKey(filename)) {
+                removes.remove(filename);
+            }
+
+            adds.put(filename, fileId);
+            this.saveBlob(file, fileId);
+            StagingArea s = new StagingArea(adds, removes);
+            FileWriterReader.writeFile(s, this.gitletDir, "index");
+        }
+
+    }
+
+    private void doCommit() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length == 0) {
+            System.out.println("Please enter a commit message.");
+            this.doExit();
+        } else if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            TreeMap<String, String> adds = this.getAdds();
+            TreeMap<String, String> removes = this.getRemoves();
+            if (adds.size() == 0 && removes.size() == 0) {
+                System.out.println("No changes added to the commit.");
+                this.doExit();
+            }
+
+            Commit parentCommit = this.getHeadCommit();
+            String parent = parentCommit.id();
+            String message = this._operands[0];
+            long timestamp = System.currentTimeMillis();
+            TreeMap<String, String> blobs = parentCommit.blobs();
+            Iterator var9 = adds.keySet().iterator();
+
+            String key;
+            while(var9.hasNext()) {
+                key = (String)var9.next();
+                blobs.put(key, adds.get(key));
+            }
+
+            var9 = removes.keySet().iterator();
+
+            while(var9.hasNext()) {
+                key = (String)var9.next();
+                blobs.remove(key);
+            }
+
+            StagingArea s = new StagingArea();
+            FileWriterReader.writeFile(s, this.gitletDir, "index");
+            Commit c = new Commit(parent, message, timestamp, blobs);
+            this.doCommit(c);
+        }
+
+    }
+
+    private void doCommit(Commit c) {
+        String currentBranch = this.currentBranch();
+        String headId = c.id();
+        FileWriterReader.writeFile(headId, this.refsDir, currentBranch);
+        FileWriterReader.writeFile(headId, this.gitletDir, "HEAD");
+        FileWriterReader.writeFile(c, this.objectsDir, headId);
+    }
+
+    private void doRm() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String filename = this._operands[0];
+            File file = new File(filename);
+            if (!file.exists()) {
+                System.out.println("No reason to remove the file.");
+                this.doExit();
+            }
+
+            String fileId = Blob.sha1(file);
+            Commit headCommit = this.getHeadCommit();
+            TreeMap<String, String> blobs = headCommit.blobs();
+            TreeMap<String, String> adds = this.getAdds();
+            TreeMap<String, String> removes = this.getRemoves();
+            if (!blobs.containsKey(filename) && !adds.containsKey(filename)) {
+                System.out.println("No reason to remove the file.");
+            }
+
+            if (blobs.containsKey(filename)) {
+                removes.put(filename, fileId);
+                Utils.restrictedDelete(file);
+            }
+
+            if (adds.containsKey(filename)) {
+                adds.remove(filename);
+            }
+
+            StagingArea s2 = new StagingArea(adds, removes);
+            FileWriterReader.writeFile(s2, this.gitletDir, "index");
+        }
+
+    }
+
+    private void doLog() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 0) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            Commit current = this.getHeadCommit();
+            System.out.println("===");
+            String parentId;
+            if (current.parent().length == 2) {
+                String parent1 = current.parent()[0].substring(0, 7);
+                parentId = current.parent()[1].substring(0, 7);
+                System.out.println("Merge: " + parent1 + " " + parentId);
+            }
+
+            System.out.println("commit " + current.id());
+            Date d1 = new Date(current.timestamp());
+            System.out.printf("Date: %ta %tb %td %tT %tY %tz", d1, d1, d1, d1, d1, d1);
+            System.out.println();
+            System.out.println(current.logMessage());
+            System.out.println();
+
+            while(current.parent()[0] != null) {
+                parentId = current.parent()[0];
+                current = this.getCommit(parentId);
+                System.out.println("===");
+                if (current.parent().length == 2) {
+                    String parent1 = current.parent()[0].substring(0, 7);
+                    String parent2 = current.parent()[1].substring(0, 7);
+                    System.out.println("Merge: " + parent1 + " " + parent2);
+                }
+
+                System.out.println("commit " + current.id());
+                Date d2 = new Date(current.timestamp());
+                System.out.printf("Date: %ta %tb %td %tT %tY %tz", d2, d2, d2, d2, d2, d2);
+                System.out.println();
+                System.out.println(current.logMessage());
+                System.out.println();
+            }
+        }
+
+    }
+
+    private void doGlobalLog() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 0) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String[] commits = this.objectsDir.list();
+            String[] var2 = commits;
+            int var3 = commits.length;
+
+            for(int var4 = 0; var4 < var3; ++var4) {
+                String id = var2[var4];
+                Commit current = this.getCommit(id);
+                System.out.println("===");
+                if (current.parent().length == 2) {
+                    String parent1 = current.parent()[0].substring(0, 7);
+                    String parent2 = current.parent()[1].substring(0, 7);
+                    System.out.println("Merge: " + parent1 + " " + parent2);
+                }
+
+                System.out.println("commit " + current.id());
+                Date date = new Date(current.timestamp());
+                System.out.println("Date: " + date);
+                System.out.println(current.logMessage());
+                System.out.println();
+            }
+        }
+
+    }
+
+    private void doFind() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String message = this._operands[0];
+            String[] commits = this.objectsDir.list();
+            int matches = 0;
+            String[] var4 = commits;
+            int var5 = commits.length;
+
+            for(int var6 = 0; var6 < var5; ++var6) {
+                String id = var4[var6];
+                Commit current = this.getCommit(id);
+                String logMessage = current.logMessage();
+                if (logMessage.equals(message)) {
+                    System.out.println(id);
+                    ++matches;
+                }
+            }
+
+            if (matches == 0) {
+                System.out.println("Found no commit with that message.");
+            }
+        }
+
+    }
+
+    private void doStatus() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 0) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            System.out.println("=== Branches ===");
+            String[] branches = this.getBranches();
+            String currentBranch = this.currentBranch();
+            String[] var3 = branches;
+            int var4 = branches.length;
+
+            String a;
+            for(int var5 = 0; var5 < var4; ++var5) {
+                a = var3[var5];
+                if (a.equals(currentBranch)) {
+                    System.out.println("*" + a);
+                } else {
+                    System.out.println(a);
+                }
+            }
+
+            System.out.println();
+            System.out.println("=== Staged Files ===");
+            TreeMap<String, String> adds = this.getAdds();
+            Set<String> addsNames = adds.keySet();
+            Iterator var11 = addsNames.iterator();
+
+            while(var11.hasNext()) {
+                a = (String)var11.next();
+                System.out.println(a);
+            }
+
+            System.out.println();
+            System.out.println("=== Removed files ===");
+            TreeMap<String, String> removes = this.getRemoves();
+            Set<String> removesNames = removes.keySet();
+            Iterator var7 = removesNames.iterator();
+
+            while(var7.hasNext()) {
+                String r = (String)var7.next();
+                System.out.println(r);
+            }
+
+            System.out.println();
+            this.extraCredit();
+        }
+
+    }
+
+    private void extraCredit() {
+        TreeMap<String, String> adds = this.getAdds();
+        TreeMap<String, String> removes = this.getRemoves();
+        System.out.println("=== Modifications Not Staged for Commit ===");
+        List<String> filesInWorkingDir = Utils.plainFilenamesIn(".");
+        Commit headCommit = this.getHeadCommit();
+        Iterator var5 = filesInWorkingDir.iterator();
+
+        String filename;
+        File file;
+        String fileId;
+        while(var5.hasNext()) {
+            filename = (String)var5.next();
+            file = new File(filename);
+            fileId = Blob.sha1(file);
+            if (headCommit.blobs().containsKey(filename) && !fileId.equals(headCommit.blobs().get(filename)) && !adds.containsValue(fileId)) {
+                System.out.println(filename);
+            }
+
+            if (adds.containsKey(filename) && !fileId.equals(adds.get(filename))) {
+                System.out.println(filename);
+            }
+        }
+
+        var5 = adds.keySet().iterator();
+
+        while(var5.hasNext()) {
+            filename = (String)var5.next();
+            file = new File(filename);
+            if (!file.exists()) {
+                System.out.println(filename);
+            }
+        }
+
+        var5 = headCommit.blobs().keySet().iterator();
+
+        while(var5.hasNext()) {
+            filename = (String)var5.next();
+            file = new File(filename);
+            if (!file.exists() && !removes.containsKey(filename)) {
+                System.out.println(filename);
+            }
+        }
+
+        System.out.println();
+        System.out.println("=== Untracked Files ===");
+        var5 = filesInWorkingDir.iterator();
+
+        while(var5.hasNext()) {
+            filename = (String)var5.next();
+            file = new File(filename);
+            fileId = Blob.sha1(file);
+            if (!headCommit.blobs().containsValue(fileId) && !adds.containsValue(fileId) && !removes.containsValue(fileId)) {
+                System.out.println(filename);
+            }
+        }
+
+        System.out.println();
+    }
+
+    private void doCheckout() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 0 && this._operands.length <= 3) {
+            String gbName;
+            if (this._operands.length == 2) {
+                if (!this._operands[0].equals("--")) {
+                    this.doExit();
+                }
+
+                gbName = this._operands[1];
+                this.doCheckout(gbName);
+            }
+
+            if (this._operands.length == 3) {
+                if (!this._operands[1].equals("--")) {
+                    this.doExit();
+                }
+
+                gbName = this._operands[2];
+                String commitId = this._operands[0];
+                if (commitId.length() < 40) {
+                    commitId = this.getFullId(commitId);
+                }
+
+                this.doCheckout(commitId, gbName);
+            }
+
+            if (this._operands.length == 1) {
+                gbName = this._operands[0];
+                File gbFile = new File(this.refsDir, gbName);
+                if (!gbFile.exists()) {
+                    System.out.println("No such branch exists.");
+                    this.doExit();
+                }
+
+                String currentBranch = this.currentBranch();
+                if (currentBranch.equals(gbName)) {
+                    System.out.println("No need to checkout the current branch.");
+                    this.doExit();
+                }
+
+                this.untrackedFilesError();
+                String gbId = Utils.readContentsAsString(gbFile);
+                Commit gbCommit = this.getCommit(gbId);
+                this.doCheckout(gbCommit);
+                FileWriterReader.writeFile(gbId, this.gitletDir, "HEAD");
+                FileWriterReader.writeFile(gbName, this.gitletDir, "currentBranch");
+                StagingArea s = new StagingArea();
+                FileWriterReader.writeFile(s, this.gitletDir, "index");
+            }
+        } else {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        }
+
+    }
+
+    private void doCheckout(String filename) {
+        Commit headCommit = this.getHeadCommit();
+        String headCommitId = headCommit.id();
+        this.doCheckout(headCommitId, filename);
+    }
+
+    private void doCheckout(String commitId, String filename) {
+        File c = new File(this.objectsDir, commitId);
+        if (!c.exists()) {
+            System.out.println("No commit with that id exists");
+            this.doExit();
+        }
+
+        Commit commit = this.getCommit(commitId);
+        TreeMap<String, String> blobs = commit.blobs();
+        if (!blobs.containsKey(filename)) {
+            System.out.println("File does not exist in that commit.");
+            this.doExit();
+        } else {
+            String fileId = (String)blobs.get(filename);
+            File fileBlob = new File(this.filesDir, fileId);
+            String s = Utils.readContentsAsString(fileBlob);
+            File file = new File(filename);
+            Utils.writeContents(file, new Object[]{s});
+        }
+
+    }
+
+    private void doCheckout(Commit commit) {
+        List<String> filesInWorkingDir = Utils.plainFilenamesIn(".");
+        Commit headCommit = this.getHeadCommit();
+        String headId = headCommit.id();
+        String commitId = commit.id();
+        TreeMap<String, String> commitBlobs = commit.blobs();
+        if (!headId.equals(commitId)) {
+            Iterator var7 = filesInWorkingDir.iterator();
+
+            String filename;
+            while(var7.hasNext()) {
+                filename = (String)var7.next();
+                File f = new File(filename);
+                Utils.restrictedDelete(f);
+            }
+
+            var7 = commitBlobs.keySet().iterator();
+
+            while(var7.hasNext()) {
+                filename = (String)var7.next();
+                this.doCheckout(commitId, filename);
+            }
+        }
+
+    }
+
+    private void untrackedFilesError() {
+        Commit headCommit = this.getHeadCommit();
+        TreeMap<String, String> headBlobs = headCommit.blobs();
+        List<String> filesInWorkingDir = Utils.plainFilenamesIn(".");
+        Iterator var4 = filesInWorkingDir.iterator();
+
+        while(var4.hasNext()) {
+            String s = (String)var4.next();
+            File f = new File(s);
+            String fId = Blob.sha1(f);
+            if (!headBlobs.containsValue(fId)) {
+                System.out.println("There is an untracked file in the way; delete it or add it first.");
+                this.doExit();
+            }
+        }
+
+    }
+
+    private void doBranch() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String branchName = this._operands[0];
+            File branchFile = new File(this.refsDir, branchName);
+            if (branchFile.exists()) {
+                System.out.println("A branch with that name already exists.");
+                this.doExit();
+            }
+
+            this.doBranch(branchName);
+        }
+
+    }
+
+    private void doBranch(String branchName) {
+        String headId = Utils.readContentsAsString(this.headFile);
+        FileWriterReader.writeFile(headId, this.refsDir, branchName);
+    }
+
+    private void doRmBranch() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String branchToRm = this._operands[0];
+            File branchToRmFile = new File(this.refsDir, branchToRm);
+            if (!branchToRmFile.exists()) {
+                System.out.println("A branch with that name does not exist.");
+                this.doExit();
+            }
+
+            String currentBranch = this.currentBranch();
+            if (currentBranch.equals(branchToRm)) {
+                System.out.println("Cannot remove the current branch.");
+                this.doExit();
+            }
+
+            branchToRmFile.delete();
+        }
+
+    }
+
+    private void doReset() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        } else {
+            String commitId = this._operands[0];
+            this.doReset(commitId);
+        }
+
+    }
+
+    private void doReset(String commitId) {
+        if (commitId.length() < 40) {
+            commitId = this.getFullId(commitId);
+        }
+
+        File c = new File(this.objectsDir, commitId);
+        if (!c.exists()) {
+            System.out.println("No commit with that id exists");
+            this.doExit();
+        }
+
+        this.untrackedFilesError();
+        Commit commit = this.getCommit(commitId);
+        this.doCheckout(commit);
+        FileWriterReader.writeFile(commitId, this.gitletDir, "HEAD");
+        String currentBranch = this.currentBranch();
+        FileWriterReader.writeFile(commitId, this.refsDir, currentBranch);
+        StagingArea s = new StagingArea();
+        FileWriterReader.writeFile(s, this.gitletDir, "index");
+    }
+
+    private void doMerge() {
+        if (!this.gitletDir.exists()) {
+            System.out.println("Not in an initialized directory.");
+            this.doExit();
+        }
+
+        if (this._operands.length != 1) {
+            System.out.println("Incorrect operands.");
+            this.doExit();
+        }
+
+        this.untrackedFilesError();
+        this.mergeErrors();
+        this.mergeEdgeCases();
+        String currentBranch = this.currentBranch();
+        String givenBranch = this._operands[0];
+        Commit currentCommit = this.getHeadCommit();
+        Commit givenCommit = this.getCommit(givenBranch);
+        Commit splitPoint = this.getSplitPoint(currentBranch, givenBranch);
+        TreeMap<String, String> adds = this.getAdds();
+        TreeMap<String, String> removes = this.getRemoves();
+        TreeMap<String, String> currentCommitBlobs = currentCommit.blobs();
+        TreeMap<String, String> givenCommitBlobs = givenCommit.blobs();
+        TreeMap<String, String> splitPointBlobs = splitPoint.blobs();
+        Iterator var11 = splitPointBlobs.keySet().iterator();
+
+        String message;
+        String gcId;
+        while(var11.hasNext()) {
+            message = (String)var11.next();
+            gcId = (String)splitPointBlobs.get(message);
+            String ccId = (String)currentCommitBlobs.get(message);
+            String gcId = (String)givenCommitBlobs.get(message);
+            if (gcId.equals(ccId) && !gcId.equals(gcId)) {
+                if (gcId == null) {
+                    File fileForRemoval = new File(message);
+                    Utils.restrictedDelete(fileForRemoval);
+                    adds.remove(message);
+                    removes.put(message, gcId);
+                } else {
+                    this.doCheckout(givenCommit.id(), message);
+                    adds.put(message, gcId);
+                }
+            }
+        }
+
+        var11 = givenCommitBlobs.keySet().iterator();
+
+        while(var11.hasNext()) {
+            message = (String)var11.next();
+            if (!splitPointBlobs.containsKey(message)) {
+                this.doCheckout(givenCommit.id(), message);
+                gcId = (String)givenCommitBlobs.get(message);
+                adds.put(message, gcId);
+            }
+        }
+
+        var11 = adds.keySet().iterator();
+
+        while(var11.hasNext()) {
+            message = (String)var11.next();
+            currentCommitBlobs.put(message, adds.get(message));
+        }
+
+        var11 = removes.keySet().iterator();
+
+        while(var11.hasNext()) {
+            message = (String)var11.next();
+            currentCommitBlobs.remove(message);
+        }
+
+        StagingArea s = new StagingArea();
+        FileWriterReader.writeFile(s, this.gitletDir, "index");
+        message = "Merged" + givenBranch + "into" + currentBranch;
+        Long timestamp = System.currentTimeMillis();
+        Commit c = new Commit(currentBranch, givenBranch, message, timestamp.longValue(), currentCommitBlobs);
+        this.doCommit(c);
+    }
+
+    private void mergeErrors() {
+        TreeMap<String, String> adds = this.getAdds();
+        TreeMap<String, String> removes = this.getRemoves();
+        if (adds.isEmpty() && removes.isEmpty()) {
+            String currentBranch = this.currentBranch();
+            String givenBranch = this._operands[0];
+            if (currentBranch.equals(givenBranch)) {
+                System.out.println("Cannot merge a branch with itself.");
+                this.doExit();
+            }
+
+            File branchFile = new File(this.refsDir, givenBranch);
+            if (!branchFile.exists()) {
+                System.out.println("A branch with that name does not exist.");
+                this.doExit();
+            }
+        } else {
+            System.out.println("You have uncommitted changes.");
+            this.doExit();
+        }
+
+    }
+
+    private void mergeEdgeCases() {
+        String currentBranch = this.currentBranch();
+        String givenBranch = this._operands[0];
+        File branchFile = new File(this.refsDir, givenBranch);
+        String currentId = Utils.readContentsAsString(this.headFile);
+        String givenId = Utils.readContentsAsString(branchFile);
+        Commit currentCommit = this.getHeadCommit();
+        Commit givenCommit = this.getCommit(givenId);
+        ArrayList<String> currentBranchHist = this.getCommitHistory(currentCommit);
+        if (currentBranchHist.contains(givenId)) {
+            System.out.println("Given branch is an ancestor of the current branch.");
+            this.doExit();
+        }
+
+        ArrayList<String> givenBranchHist = this.getCommitHistory(givenCommit);
+        if (givenBranchHist.contains(currentId)) {
+            FileWriterReader.writeFile(givenId, this.gitletDir, "HEAD");
+            FileWriterReader.writeFile(givenId, this.refsDir, currentBranch);
+            System.out.println("Current branch fast-forwarded");
+            this.doExit();
+        }
+
+    }
+
+    private void doExit() {
+        System.exit(0);
+    }
+
+    public Commit getSplitPoint(String branch1, String branch2) {
+        File ref1 = new File(this.refsDir, branch1);
+        File ref2 = new File(this.refsDir, branch2);
+        String head1 = Utils.readContentsAsString(ref1);
+        String head2 = Utils.readContentsAsString(ref2);
+        File obj1 = new File(this.objectsDir, head1);
+        File obj2 = new File(this.objectsDir, head2);
+        Commit c1 = FileWriterReader.readCommit(obj1);
+        Commit c2 = FileWriterReader.readCommit(obj2);
+        ArrayList<String> history1 = this.getCommitHistory(c1);
+        ArrayList<String> history2 = this.getCommitHistory(c2);
+        int i = history1.size() - 1;
+        int j = history2.size() - 1;
+
+        String id;
+        for(id = ""; ((String)history1.get(i)).equals(history2.get(j)); --j) {
+            id = (String)history1.get(i);
+            --i;
+        }
+
+        Commit c = this.getCommit(id);
+        return c;
+    }
+
+    public ArrayList<String> getCommitHistory(Commit c) {
+        ArrayList<String> history = new ArrayList();
+        history.add(c.id());
+
+        while(c.parent()[0] != null) {
+            c = this.getCommit(c.parent()[0]);
+            history.add(c.id());
+        }
+
+        return history;
+    }
+
+    public Commit getHeadCommit() {
+        String headId = Utils.readContentsAsString(this.headFile);
+        File head = new File(this.objectsDir, headId);
+        Commit headCommit = FileWriterReader.readCommit(head);
+        return headCommit;
+    }
+
+    public Commit getCommit(String commitId) {
+        File commitFile = new File(this.objectsDir, commitId);
+        Commit commit = FileWriterReader.readCommit(commitFile);
+        return commit;
+    }
+
+    public TreeMap<String, String> getAdds() {
+        StagingArea stagingArea = FileWriterReader.readStagingArea(this.indexFile);
+        return stagingArea.stagedToAdd();
+    }
+
+    public TreeMap<String, String> getRemoves() {
+        StagingArea stagingArea = FileWriterReader.readStagingArea(this.indexFile);
+        return stagingArea.stagedToRemove();
+    }
+
+    public String[] getBranches() {
+        return this.refsDir.list();
+    }
+
+    public String currentBranch() {
+        return Utils.readContentsAsString(this.currentBranchFile);
+    }
+
+    public void saveBlob(File location, String filename) {
+        byte[] blobByte = Utils.readContents(location);
+        File blobDestination = new File(this.filesDir, filename);
+        Utils.writeContents(blobDestination, new Object[]{blobByte});
+    }
+
+    public String getFullId(String shortId) {
+        List<String> commitIds = Utils.plainFilenamesIn(this.objectsDir);
+        Iterator var3 = commitIds.iterator();
+
+        String s;
+        do {
+            if (!var3.hasNext()) {
+                return shortId;
+            }
+
+            s = (String)var3.next();
+        } while(!s.contains(shortId));
+
+        return s;
+    }
+
+    public String command() {
+        return this._command;
+    }
+
+    public String[] operands() {
+        return this._operands;
+    }
+}
